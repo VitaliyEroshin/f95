@@ -30,3 +30,15 @@
 *.exe
 *.out
 *.app
+
+# IDE config folders
+.vscode
+
+# Build folder
+src/build
+
+# Bison/Flex generated files
+src/location.hh
+src/parser.cpp
+src/parser.hh
+src/scanner.cpp
