@@ -8,6 +8,7 @@
 
 %code requires {
     #include <string>
+    #include <cassert>
     /* Forward declaration of classes in order to disable cyclic dependencies */
     class Scanner;
     class Driver;
@@ -49,11 +50,14 @@
 %define api.token.prefix {TOK_}
 // token name in variable
 %token
-    END 0 "end of file"
+    EOF 0 "end of file"
     PROGRAM "program"
-    ENDPROGRAM "end"
+    END "end"
     INT_DECLARATION "int_declaration"
     PRINT "print"
+    IF "if"
+    ELSE "else"
+    THEN "then"
     DOUBLE_COLON "::"
     COMMA ","
     EQUAL "="
@@ -70,6 +74,7 @@
 %token <std::string> IDENTIFIER "identifier"
 %token <int> INTEGER "integer"
 %nterm <int> integer_expression
+%nterm <bool> bool_expression
 
 // Prints output in parsing option for debugging location terminal
 %printer { yyo << $$; } <*>;
@@ -88,8 +93,8 @@ program_declaration:
     }
 
 program_end: 
-    "end" "identifier" {
-        if ($2 != driver.program_label) {
+    "end" "program" "identifier" {
+        if ($3 != driver.program_label) {
             std::cerr << "Expected label \"" << driver.program_label << "\"" << std::endl;
         }
     }
@@ -103,6 +108,7 @@ statement:
     declaration
     | assignment
     | print
+    | conditional_block
 
 declaration:
     integer_declaration;
@@ -141,6 +147,52 @@ assignment:
 print:
     "print" "identifier" {
         std::cout << get_integer_or_abort($2, driver) << std::endl;
+    }
+
+conditional_block:
+    "if" "(" bool_expression ")" make_new_block if_statement
+    | "if" if_conditional "end" "if" {
+        driver.process_if_blocks();
+    }
+
+if_conditional:
+    condition_block
+    | condition_block "else" "n" if_block
+    | condition_block "else" "if" if_conditional
+
+condition_block:
+    "(" bool_expression ")" "then" "n" if_block {
+        driver.conditions_for_if_blocks.push_back($2);
+    }
+
+bool_expression:
+    integer_expression {
+        $$ = ($1 != 0); 
+    }
+
+if_block:
+    make_new_block if_statements
+
+if_statements:
+    %empty
+    | if_statement "n" if_statements
+
+if_statement:
+    if_block_assignment
+
+make_new_block:
+    %empty {
+        driver.if_blocks.push_back({});
+    }
+
+if_block_assignment:
+    "identifier" "=" integer_expression {
+        std::string key = $1;
+        int value = $3;
+        auto f = [key, value, this]() {
+            get_integer_or_abort(key, driver) = value;
+        };
+        driver.if_blocks.back().push_back(f);
     }
 %%
 

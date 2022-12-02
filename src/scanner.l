@@ -16,9 +16,6 @@
 %option caseless
 
 %{
-  // Code definitions at the end of scanner.cpp
-
-  // A number symbol corresponding to the value in S.
   yy::parser::symbol_type make_INTEGER(
     const std::string &s,
     const yy::parser::location_type& loc
@@ -37,37 +34,23 @@ int   [0-9]+
 blank [ \t\r]
 
 %{
-  // Code run each time a pattern is matched.
   #define YY_USER_ACTION UpdateLocation();
 %}
 
 %%
-
-
 %{
-  // A handy shortcut to the location held by the driver.
   yy::location& loc = driver.location;
-  if (driver.location_debug) {
-  // Code run each time yylex is called.
-    std::cerr << "BEFORE " << loc << std::endl;
-  }
-  // loc.step();
-  if (driver.location_debug) {
-    std::cerr << "AFTER " <<  loc << std::endl;
-  }
 %}
 
-{blank}+   {
-    if (driver.location_debug) {
-        std::cerr << "Blank matched" << std::endl;
-    }
-    // loc.step();
-}
+{blank}+   {}
 
 "program"           return yy::parser::make_PROGRAM(loc);
-"end program"       return yy::parser::make_ENDPROGRAM(loc);
+"end"               return yy::parser::make_END(loc);
 "integer"           return yy::parser::make_INT_DECLARATION(loc);
 "print"             return yy::parser::make_PRINT(loc);
+"if"                return yy::parser::make_IF(loc);
+"else"              return yy::parser::make_ELSE(loc);
+"then"              return yy::parser::make_THEN(loc);
 "::"                return yy::parser::make_DOUBLE_COLON(loc);
 ","                 return yy::parser::make_COMMA(loc);
 "="                 return yy::parser::make_EQUAL(loc);
@@ -78,24 +61,23 @@ blank [ \t\r]
 "%"                 return yy::parser::make_PERCENT(loc);
 "("                 return yy::parser::make_LPAREN(loc);
 ")"                 return yy::parser::make_RPAREN(loc);
-
 \n+                 {
                         loc.lines(yyleng);
                         loc.step();
                         return yy::parser::make_NEW_LINE_SEPARATOR(loc);
                     }
 
-{int}      return make_INTEGER(yytext, loc);
-{id}       {
-                if (driver.location_debug) {
-                    std::cerr << "ID found " << yytext << std::endl;
-                }
-                return yy::parser::make_IDENTIFIER(yytext, loc);
-           }
-.          {
-                throw yy::parser::syntax_error(loc, "invalid character: " + std::string(yytext));
-           }
-<<EOF>>    return yy::parser::make_END (loc);
+{int}               return make_INTEGER(yytext, loc);
+{id}                {
+                        if (driver.location_debug) {
+                            std::cerr << "ID found " << yytext << std::endl;
+                        }
+                        return yy::parser::make_IDENTIFIER(yytext, loc);
+                    }
+.                   {
+                        throw yy::parser::syntax_error(loc, "invalid character: " + std::string(yytext));
+                    }
+<<EOF>>             return yy::parser::make_EOF (loc);
 %%
 
 yy::parser::symbol_type make_INTEGER(

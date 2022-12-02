@@ -1,7 +1,0 @@
-program test
-    integer x = 5 + 5 - 10
-    integer papka = 0903351234 / 0234102398
-    integer mamka = INT_MAX
-    integer synka = papka % mamka
-    print synka
-end program test
