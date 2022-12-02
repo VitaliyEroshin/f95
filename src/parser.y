@@ -69,6 +69,19 @@
     PERCENT "%"
     LPAREN "("
     RPAREN ")"
+    AND_SYM ".AND."
+    OR_SYM ".OR."
+    NOT_SYM ".NOT."
+    TRUE_SYM ".TRUE."
+    FALSE_SYM ".FALSE."
+    EQUAL_SYM ".EQ."
+    NOT_EQUAL_SYM ".NE."
+    GE_SYM ".GE."
+    LE_SYM ".LE."
+    GT_SYM ".GT."
+    LS_SYM ".LS."
+    GREATER ">"
+    LESS "<"
 ;
 
 %token <std::string> IDENTIFIER "identifier"
@@ -82,6 +95,7 @@
 %%
 %left "+" "-" "%";
 %left "*" "/";
+%left ".NOT." ".AND." ".OR.";
 
 %start main_scope;
 main_scope: 
@@ -170,9 +184,25 @@ condition_block:
     }
 
 bool_expression:
-    integer_expression {
-        $$ = ($1 != 0); 
-    }
+    integer_expression "=" "=" integer_expression { $$ = ($1 == $4); }
+    | integer_expression ".EQ." integer_expression { $$ = ($1 == $3); }
+    | integer_expression "/" "=" integer_expression { $$ = ($1 != $4); }
+    | integer_expression ".NE." integer_expression { $$ = ($1 != $3); }
+    | integer_expression ">" "=" integer_expression { $$ = ($1 >= $4); }
+    | integer_expression ".GE." integer_expression { $$ = ($1 >= $3); }
+    | integer_expression "<" "=" integer_expression { $$ = ($1 <= $4); }
+    | integer_expression ".LE." integer_expression { $$ = ($1 <= $3); }
+    | integer_expression ">" integer_expression { $$ = ($1 > $3); }
+    | integer_expression ".GT." integer_expression { $$ = ($1 > $3); }
+    | integer_expression "<" integer_expression { $$ = ($1 < $3); }
+    | integer_expression ".LS." integer_expression { $$ = ($1 < $3); }
+    | "(" bool_expression ")" { $$ = $2; }
+    | bool_expression ".AND." bool_expression { $$ = $1 && $3; }
+    | bool_expression ".OR." bool_expression { $$ = $1 || $3; }
+    | ".NOT." bool_expression { $$ = !$2; }
+    | ".TRUE." { $$ = true; }
+    | ".FALSE." { $$ = false; }
+
 
 if_block:
     make_new_block if_statements
@@ -195,6 +225,13 @@ if_block_assignment:
         int value = $3;
         auto f = [key, value, this]() {
             get_integer_or_abort(key, driver) = value;
+        };
+        driver.if_blocks.back().push_back(f);
+    }
+    | "print" integer_expression {
+        int result = $2;
+        auto f = [result, this]() {
+            std::cout << result << std::endl;
         };
         driver.if_blocks.back().push_back(f);
     }

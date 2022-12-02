@@ -61,6 +61,20 @@ blank [ \t\r]
 "%"                 return yy::parser::make_PERCENT(loc);
 "("                 return yy::parser::make_LPAREN(loc);
 ")"                 return yy::parser::make_RPAREN(loc);
+".AND."             return yy::parser::make_AND_SYM(loc);
+".OR."              return yy::parser::make_OR_SYM(loc);
+".NOT."             return yy::parser::make_NOT_SYM(loc);
+".TRUE."            return yy::parser::make_TRUE_SYM(loc);
+".FALSE."           return yy::parser::make_FALSE_SYM(loc);
+".EQ."              return yy::parser::make_EQUAL_SYM(loc);
+".NE."              return yy::parser::make_NOT_EQUAL_SYM(loc);
+".GE."              return yy::parser::make_GE_SYM(loc);
+".LE."              return yy::parser::make_LE_SYM(loc);
+".GT."              return yy::parser::make_GT_SYM(loc);
+".LS."              return yy::parser::make_LS_SYM(loc);
+">"                 return yy::parser::make_GREATER(loc);
+"<"                 return yy::parser::make_LESS(loc);
+
 \n+                 {
                         loc.lines(yyleng);
                         loc.step();
