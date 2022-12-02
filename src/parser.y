@@ -150,7 +150,10 @@ print:
     }
 
 conditional_block:
-    "if" "(" bool_expression ")" make_new_block if_statement
+    "if" "(" bool_expression ")" make_new_block if_statement {
+        driver.conditions_for_if_blocks.push_back($3);
+        driver.process_if_blocks();
+    }
     | "if" if_conditional "end" "if" {
         driver.process_if_blocks();
     }

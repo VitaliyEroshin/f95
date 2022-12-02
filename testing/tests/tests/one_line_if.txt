@@ -1,0 +1,5 @@
+program onelineif
+    integer x = 2
+    if (1) x = 3
+    print x
+end program onelineif
