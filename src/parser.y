@@ -103,6 +103,7 @@ units:
     %empty
     | statement "n" units
     | statement
+    | "n" units
 
 statement:
     declaration
