@@ -1,4 +1,0 @@
-program p
-    integer x = 5
-    print x
-end program p
