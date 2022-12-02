@@ -46,7 +46,7 @@ void Driver::process_if_blocks() {
 
     size_t n = conditions_for_if_blocks.size();
     for (size_t i = 0; i < n; ++i) {
-        bool condition = conditions_for_if_blocks[i];
+        bool condition = conditions_for_if_blocks[i]();
         if (!condition) {
             continue;
         }
@@ -63,6 +63,45 @@ void Driver::process_if_blocks() {
 
     clear();
 }
+
+int& Driver::get_integer_or_abort(std::string key) {
+    auto it = integer_variables.find(key);
+    if (it == integer_variables.end()) {
+        std::cerr << "Could not find integer variable called";
+        std::cerr <<  "(\"" + key + "\"). I am sorry." << std::endl;
+        abort();
+    }
+    return it->second;
+}
+
+std::function<bool()> Driver::get_eq_comparison(IntExpr lhs, IntExpr rhs) {
+    return [lhs, rhs]() {
+        return lhs() == rhs();
+    };
+}
+
+std::function<bool()> Driver::get_ls_comparison(IntExpr lhs, IntExpr rhs) {
+    return [lhs, rhs]() {
+        return lhs() < rhs();
+    };
+}
+
+IntExpr Driver::get_intexpr_or_abort(std::string key) {
+    auto it = integer_variables.find(key);
+    if (it == integer_variables.end()) {
+        std::cerr << "Could not find integer variable called";
+        std::cerr <<  "(\"" + key + "\"). I am sorry." << std::endl;
+        abort();
+    }
+
+    auto l = [key, this]() {
+        return integer_variables[key];
+    };
+
+    IntExpr expr(l);
+    return expr;
+}
+
 
 void Driver::scan_end() {
     stream.close();

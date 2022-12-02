@@ -34,6 +34,8 @@ add_executable(
     main
     main.cpp
     driver.cpp
+    utilities/boolean.cpp
+    utilities/integers.cpp
     ${BISON_Parser_OUTPUTS}
     ${FLEX_Scanner_OUTPUTS}
 )

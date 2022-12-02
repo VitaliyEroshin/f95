@@ -7,8 +7,11 @@
 %define parse.assert
 
 %code requires {
+    #pragma once
     #include <string>
     #include <cassert>
+    #include "utilities/boolean.h"
+    #include "utilities/integers.h"
     /* Forward declaration of classes in order to disable cyclic dependencies */
     class Scanner;
     class Driver;
@@ -21,7 +24,7 @@
 %code {
     #include "driver.hh"
     #include "location.hh"
-
+    
     /* Redefine parser to use our function from scanner */
     static yy::parser::symbol_type yylex(Scanner &scanner) {
         return scanner.ScanToken();
@@ -32,18 +35,6 @@
 
 %parse-param { Scanner &scanner }
 %parse-param { Driver &driver }
-
-%code {
-    int& get_integer_or_abort(const std::string& key, Driver& driver) {
-        auto it = driver.integer_variables.find(key);
-        if (it == driver.integer_variables.end()) {
-            std::cerr << "Could not find integer variable called";
-            std::cerr <<  "(\"" + key + "\"). I am sorry." << std::endl;
-            abort();
-        }
-        return it->second;
-    }
-}
 
 %locations
 
@@ -86,8 +77,8 @@
 
 %token <std::string> IDENTIFIER "identifier"
 %token <int> INTEGER "integer"
-%nterm <int> integer_expression
-%nterm <bool> bool_expression
+%nterm <IntExpr> integer_expression
+%nterm <BoolExpr> bool_expression
 
 // Prints output in parsing option for debugging location terminal
 %printer { yyo << $$; } <*>;
@@ -138,15 +129,22 @@ make_ints:
 
 make_int:
     "identifier" "=" integer_expression {
-        driver.integer_variables[$1] = $3;
+        driver.integer_variables[$1] = $3();
+        // std::cout << "Constructed " << driver.integer_variables[$1] << std::endl;
     }
     | "identifier"
 
 integer_expression:
     "identifier" {
-        $$ = get_integer_or_abort($1, driver);
+        // std::cout << "Integer " << driver.get_integer_or_abort($1) << ", got ";
+        auto l = driver.get_intexpr_or_abort($1);
+        // std::cout << l() << std::endl;
+        $$ = l;
     }
-    | "integer"
+    | "integer" { 
+        $$ = IntExpr($1); 
+        // std::cout << "Got IntExpr from integer " << $1 << " -> " << $$() << std::endl;
+    }
     | integer_expression "+" integer_expression { $$ = $1 + $3; }
     | integer_expression "-" integer_expression { $$ = $1 - $3; }
     | integer_expression "*" integer_expression { $$ = $1 * $3; }
@@ -156,12 +154,12 @@ integer_expression:
 
 assignment:
     "identifier" "=" integer_expression {
-        get_integer_or_abort($1, driver) = $3;
+        driver.get_integer_or_abort($1) = $3();
     }
 
 print:
-    "print" "identifier" {
-        std::cout << get_integer_or_abort($2, driver) << std::endl;
+    "print" integer_expression {
+        std::cout << $2() << std::endl;
     }
 
 conditional_block:
@@ -184,24 +182,24 @@ condition_block:
     }
 
 bool_expression:
-    integer_expression "=" "=" integer_expression { $$ = ($1 == $4); }
-    | integer_expression ".EQ." integer_expression { $$ = ($1 == $3); }
-    | integer_expression "/" "=" integer_expression { $$ = ($1 != $4); }
-    | integer_expression ".NE." integer_expression { $$ = ($1 != $3); }
-    | integer_expression ">" "=" integer_expression { $$ = ($1 >= $4); }
-    | integer_expression ".GE." integer_expression { $$ = ($1 >= $3); }
-    | integer_expression "<" "=" integer_expression { $$ = ($1 <= $4); }
-    | integer_expression ".LE." integer_expression { $$ = ($1 <= $3); }
-    | integer_expression ">" integer_expression { $$ = ($1 > $3); }
-    | integer_expression ".GT." integer_expression { $$ = ($1 > $3); }
-    | integer_expression "<" integer_expression { $$ = ($1 < $3); }
-    | integer_expression ".LS." integer_expression { $$ = ($1 < $3); }
+    integer_expression "=" "=" integer_expression { $$ = BoolExpr(driver.get_eq_comparison($1, $4)); }
+    | integer_expression ".EQ." integer_expression { $$ = BoolExpr(driver.get_eq_comparison($1, $3)); }
+    | integer_expression "/" "=" integer_expression { $$ = -BoolExpr(driver.get_eq_comparison($1, $4)); }
+    | integer_expression ".NE." integer_expression { $$ = -BoolExpr(driver.get_eq_comparison($1, $3)); }
+    | integer_expression ">" "=" integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($1, $4)); }
+    | integer_expression ".GE." integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($1, $3)); }
+    | integer_expression "<" "=" integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($4, $1)); }
+    | integer_expression ".LE." integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($3, $1)); }
+    | integer_expression ">" integer_expression { $$ = BoolExpr(driver.get_ls_comparison($3, $1)); }
+    | integer_expression ".GT." integer_expression { $$ = BoolExpr(driver.get_ls_comparison($3, $1)); }
+    | integer_expression "<" integer_expression { $$ = BoolExpr(driver.get_ls_comparison($1, $3)); }
+    | integer_expression ".LS." integer_expression { $$ = BoolExpr(driver.get_ls_comparison($1, $3)); }
     | "(" bool_expression ")" { $$ = $2; }
-    | bool_expression ".AND." bool_expression { $$ = $1 && $3; }
-    | bool_expression ".OR." bool_expression { $$ = $1 || $3; }
-    | ".NOT." bool_expression { $$ = !$2; }
-    | ".TRUE." { $$ = true; }
-    | ".FALSE." { $$ = false; }
+    | bool_expression ".AND." bool_expression { $$ = $1 & $3; }
+    | bool_expression ".OR." bool_expression { $$ = $1 | $3; }
+    | ".NOT." bool_expression { $$ = -BoolExpr($2); }
+    | ".TRUE." { $$ = BoolExpr(true); }
+    | ".FALSE." { $$ = BoolExpr(false); }
 
 
 if_block:
@@ -222,16 +220,16 @@ make_new_block:
 if_block_assignment:
     "identifier" "=" integer_expression {
         std::string key = $1;
-        int value = $3;
+        IntExpr value = $3;
         auto f = [key, value, this]() {
-            get_integer_or_abort(key, driver) = value;
+            driver.get_integer_or_abort(key) = value();
         };
         driver.if_blocks.back().push_back(f);
     }
     | "print" integer_expression {
-        int result = $2;
+        IntExpr result = $2;
         auto f = [result, this]() {
-            std::cout << result << std::endl;
+            std::cout << result() << std::endl;
         };
         driver.if_blocks.back().push_back(f);
     }
