@@ -9,7 +9,7 @@ program complex
         x = 3
     end if
 
-    print x
+    print *, x
 
 
 
@@ -21,6 +21,6 @@ program complex
         x = 5
     end if
 
-    print x
+    print *, x
 
 end program complex

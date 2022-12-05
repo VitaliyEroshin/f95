@@ -1,0 +1,10 @@
+program strings
+    character (len = 4) :: a = "abac"
+    print *, a
+
+    character (len = 30) :: b = "aca"
+    print *, b
+
+    b = a // b
+    print *, b
+end program strings

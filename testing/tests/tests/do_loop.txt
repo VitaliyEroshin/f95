@@ -1,0 +1,14 @@
+program loop_test
+    integer :: n = 1
+    do i = 1, 10
+        n = n * i
+    end do
+
+    print *, n
+
+    do n = 5, 6
+        print *, n
+    end do
+
+    print *, n
+end program loop_test
