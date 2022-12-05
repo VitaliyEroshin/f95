@@ -64,16 +64,6 @@ void Driver::process_if_blocks() {
     clear();
 }
 
-int& Driver::get_integer_or_abort(std::string key) {
-    auto it = integer_variables.find(key);
-    if (it == integer_variables.end()) {
-        std::cerr << "Could not find integer variable called";
-        std::cerr <<  "(\"" + key + "\"). I am sorry." << std::endl;
-        abort();
-    }
-    return it->second;
-}
-
 std::function<bool()> Driver::get_eq_comparison(IntExpr lhs, IntExpr rhs) {
     return [lhs, rhs]() {
         return lhs() == rhs();
@@ -86,24 +76,50 @@ std::function<bool()> Driver::get_ls_comparison(IntExpr lhs, IntExpr rhs) {
     };
 }
 
-IntExpr Driver::get_intexpr_or_abort(std::string key) {
-    auto it = integer_variables.find(key);
-    if (it == integer_variables.end()) {
-        std::cerr << "Could not find integer variable called";
-        std::cerr <<  "(\"" + key + "\"). I am sorry." << std::endl;
+void Driver::print(const std::string& variable) {
+    statement_queue.push_back([variable, this]() {
+        if (integers.has(variable)) {
+            std::cout << integers.get(variable) << std::endl;
+            return;
+        } 
+        
+        if (strings.has(variable)) {
+            std::cout << strings.get(variable) << std::endl;
+            return;
+        }
+
+        std::cerr << "Could not find variable called";
+        std::cerr <<  "(\"" + variable + "\"). I am sorry." << std::endl;
         abort();
-    }
-
-    auto l = [key, this]() {
-        return integer_variables[key];
-    };
-
-    IntExpr expr(l);
-    return expr;
+    });
 }
 
+void Driver::assign_variable(const std::string& variable, IntExpr expression) {
+    statement_queue.push_back([expression, variable, this]() {
+        integers.get(variable) = expression();
+    });
+}
+
+void Driver::assign_variable(const std::string& variable, StringExpr expression) {
+    statement_queue.push_back([expression, variable, this]() {
+        strings.get(variable) = expression();
+    });
+}
+
+void Driver::assert_program_label(const std::string& label) {
+    if (label == program_label) {
+        return;
+    }
+
+    std::cerr << "Expected label \"" << program_label;
+    std::cerr << "\"" << std::endl;
+    abort();
+}
+
+void Driver::set_program_label(const std::string& label) {
+    program_label = label;
+}
 
 void Driver::scan_end() {
     stream.close();
 }
-

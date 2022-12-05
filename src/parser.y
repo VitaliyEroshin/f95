@@ -12,11 +12,11 @@
     #include <cassert>
     #include "utilities/boolean.h"
     #include "utilities/integers.h"
-    /* Forward declaration of classes in order to disable cyclic dependencies */
+    #include "utilities/strings.h"
+
     class Scanner;
     class Driver;
 }
-
 
 %define parse.trace
 %define parse.error verbose
@@ -25,7 +25,6 @@
     #include "driver.hh"
     #include "location.hh"
     
-    /* Redefine parser to use our function from scanner */
     static yy::parser::symbol_type yylex(Scanner &scanner) {
         return scanner.ScanToken();
     }
@@ -39,16 +38,18 @@
 %locations
 
 %define api.token.prefix {TOK_}
-// token name in variable
 %token
     EOF 0 "end of file"
     PROGRAM "program"
     END "end"
     INT_DECLARATION "int_declaration"
+    CHARACTER "character"
+    LEN "len"
     PRINT "print"
     IF "if"
     ELSE "else"
     THEN "then"
+    DO "do"
     DOUBLE_COLON "::"
     COMMA ","
     EQUAL "="
@@ -60,6 +61,8 @@
     PERCENT "%"
     LPAREN "("
     RPAREN ")"
+    NEQ "/="
+    CONCAT "CONCAT"
     AND_SYM ".AND."
     OR_SYM ".OR."
     NOT_SYM ".NOT."
@@ -76,11 +79,13 @@
 ;
 
 %token <std::string> IDENTIFIER "identifier"
+%token <std::string> STRING "string"
 %token <int> INTEGER "integer"
 %nterm <IntExpr> integer_expression
 %nterm <BoolExpr> bool_expression
+%nterm <StringExpr> string_expression
+%nterm <std::string> do_counter
 
-// Prints output in parsing option for debugging location terminal
 %printer { yyo << $$; } <*>;
 
 %%
@@ -90,34 +95,89 @@
 
 %start main_scope;
 main_scope: 
-    program_declaration units program_end
+    %empty
+    | program_declaration units program_end "n" main_scope
+    | program_declaration units program_end
 
 program_declaration: 
     "program" "identifier" "n" {
+        driver.set_program_label($2);
         driver.program_label = $2;
     }
 
 program_end: 
     "end" "program" "identifier" {
-        if ($3 != driver.program_label) {
-            std::cerr << "Expected label \"" << driver.program_label << "\"" << std::endl;
-        }
+        driver.assert_program_label($3);
     }
 
 units:
     %empty
-    | statement "n" units
-    | statement
+    | block "n" units
+    | block
     | "n" units
 
-statement:
-    declaration
-    | assignment
-    | print
+block:
+    statement {
+        driver.statement_queue.back()();
+        driver.statement_queue.pop_back();
+    }
     | conditional_block
+    | do_loop_block
+    | declaration
+
+statement:
+    print
+    | assignment
+    | string_assignment
+
+print:
+    "print" "*" "," "identifier" {
+        driver.print($4);
+    }
+
+assignment:
+    "identifier" "=" integer_expression {
+        driver.assign_variable($1, $3);
+    }
+
+string_assignment:
+    "identifier" "=" string_expression {
+        driver.assign_variable($1, $3);
+    }
+
+string_expression:
+    "identifier" "CONCAT" string_expression {
+        $$ = driver.strings.get_strexpr($1) / $3;
+    }
+    | "identifier" "CONCAT" "identifier" {
+        $$ = driver.strings.get_strexpr($1) / driver.strings.get_strexpr($3);
+    }
+    | "string" { $$ = StringExpr($1); }
+    | "string" "CONCAT" string_expression {
+        $$ = StringExpr($1) / $3;
+    }
 
 declaration:
-    integer_declaration;
+    integer_declaration
+    | character_declaration
+
+character_declaration:
+    "character" "(" set_string_length ")" "::" make_strings
+
+set_string_length:
+    "len" "=" "integer" {
+        driver.strings.set_length($3);
+    }
+
+make_strings:
+    make_string
+    | make_string "," make_strings
+
+make_string:
+    "identifier" "=" "string" {
+        driver.strings.declare($1);
+        driver.strings.set($1, $3);
+    }
 
 integer_declaration:
     "int_declaration" "::" make_ints
@@ -129,22 +189,17 @@ make_ints:
 
 make_int:
     "identifier" "=" integer_expression {
-        driver.integer_variables[$1] = $3();
-        // std::cout << "Constructed " << driver.integer_variables[$1] << std::endl;
+        driver.integers.declare($1);
+        driver.integers.set($1, $3());
     }
-    | "identifier"
+    | "identifier" {
+        driver.integers.declare($1);
+    }
+
 
 integer_expression:
-    "identifier" {
-        // std::cout << "Integer " << driver.get_integer_or_abort($1) << ", got ";
-        auto l = driver.get_intexpr_or_abort($1);
-        // std::cout << l() << std::endl;
-        $$ = l;
-    }
-    | "integer" { 
-        $$ = IntExpr($1); 
-        // std::cout << "Got IntExpr from integer " << $1 << " -> " << $$() << std::endl;
-    }
+    "integer" { $$ = IntExpr($1); }
+    | "identifier" { $$ = driver.integers.get_intexpr($1); }
     | integer_expression "+" integer_expression { $$ = $1 + $3; }
     | integer_expression "-" integer_expression { $$ = $1 - $3; }
     | integer_expression "*" integer_expression { $$ = $1 * $3; }
@@ -152,19 +207,10 @@ integer_expression:
     | integer_expression "%" integer_expression { $$ = $1 % $3; }
     | "(" integer_expression ")" { $$ = $2; }
 
-assignment:
-    "identifier" "=" integer_expression {
-        driver.get_integer_or_abort($1) = $3();
-    }
-
-print:
-    "print" integer_expression {
-        std::cout << $2() << std::endl;
-    }
-
 conditional_block:
-    "if" "(" bool_expression ")" make_new_block if_statement {
+    "if" "(" bool_expression ")" statement {
         driver.conditions_for_if_blocks.push_back($3);
+        driver.if_blocks.push_back(std::move(driver.statement_queue));
         driver.process_if_blocks();
     }
     | "if" if_conditional "end" "if" {
@@ -182,18 +228,42 @@ condition_block:
     }
 
 bool_expression:
-    integer_expression "=" "=" integer_expression { $$ = BoolExpr(driver.get_eq_comparison($1, $4)); }
-    | integer_expression ".EQ." integer_expression { $$ = BoolExpr(driver.get_eq_comparison($1, $3)); }
-    | integer_expression "/" "=" integer_expression { $$ = -BoolExpr(driver.get_eq_comparison($1, $4)); }
-    | integer_expression ".NE." integer_expression { $$ = -BoolExpr(driver.get_eq_comparison($1, $3)); }
-    | integer_expression ">" "=" integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($1, $4)); }
-    | integer_expression ".GE." integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($1, $3)); }
-    | integer_expression "<" "=" integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($4, $1)); }
-    | integer_expression ".LE." integer_expression { $$ = -BoolExpr(driver.get_ls_comparison($3, $1)); }
-    | integer_expression ">" integer_expression { $$ = BoolExpr(driver.get_ls_comparison($3, $1)); }
-    | integer_expression ".GT." integer_expression { $$ = BoolExpr(driver.get_ls_comparison($3, $1)); }
-    | integer_expression "<" integer_expression { $$ = BoolExpr(driver.get_ls_comparison($1, $3)); }
-    | integer_expression ".LS." integer_expression { $$ = BoolExpr(driver.get_ls_comparison($1, $3)); }
+    integer_expression "=" "=" integer_expression {
+        $$ = BoolExpr(driver.get_eq_comparison($1, $4)); 
+    }
+    | integer_expression ".EQ." integer_expression {
+        $$ = BoolExpr(driver.get_eq_comparison($1, $3));
+    }
+    | integer_expression "/=" integer_expression {
+        $$ = -BoolExpr(driver.get_eq_comparison($1, $3));
+    }
+    | integer_expression ".NE." integer_expression {
+        $$ = -BoolExpr(driver.get_eq_comparison($1, $3)); 
+    }
+    | integer_expression ">" "=" integer_expression {
+        $$ = -BoolExpr(driver.get_ls_comparison($1, $4));
+    }
+    | integer_expression ".GE." integer_expression {
+        $$ = -BoolExpr(driver.get_ls_comparison($1, $3));
+    }
+    | integer_expression "<" "=" integer_expression {
+        $$ = -BoolExpr(driver.get_ls_comparison($4, $1));
+    }
+    | integer_expression ".LE." integer_expression {
+        $$ = -BoolExpr(driver.get_ls_comparison($3, $1));
+    }
+    | integer_expression ">" integer_expression {
+        $$ = BoolExpr(driver.get_ls_comparison($3, $1));
+    }
+    | integer_expression ".GT." integer_expression {
+        $$ = BoolExpr(driver.get_ls_comparison($3, $1));
+    }
+    | integer_expression "<" integer_expression {
+        $$ = BoolExpr(driver.get_ls_comparison($1, $3));
+    }
+    | integer_expression ".LS." integer_expression {
+        $$ = BoolExpr(driver.get_ls_comparison($1, $3));
+    }
     | "(" bool_expression ")" { $$ = $2; }
     | bool_expression ".AND." bool_expression { $$ = $1 & $3; }
     | bool_expression ".OR." bool_expression { $$ = $1 | $3; }
@@ -201,42 +271,44 @@ bool_expression:
     | ".TRUE." { $$ = BoolExpr(true); }
     | ".FALSE." { $$ = BoolExpr(false); }
 
-
 if_block:
-    make_new_block if_statements
+    if_statements {
+        driver.if_blocks.emplace_back(std::move(driver.statement_queue));
+    }
 
 if_statements:
     %empty
-    | if_statement "n" if_statements
+    | statement "n" if_statements
 
-if_statement:
-    if_block_assignment
+do_loop_block:
+    "do" do_counter "=" integer_expression "," integer_expression
+    "n" do_statements "end" "do" {
+        int& counter = driver.integers.get($2);
+        counter = $4();
+        do {
+            for (auto& f : driver.statement_queue) {
+                f();
+            }
 
-make_new_block:
-    %empty {
-        driver.if_blocks.push_back({});
+            ++counter;
+        } while (counter <= $6());
+    
+        driver.statement_queue.clear();
     }
 
-if_block_assignment:
-    "identifier" "=" integer_expression {
-        std::string key = $1;
-        IntExpr value = $3;
-        auto f = [key, value, this]() {
-            driver.get_integer_or_abort(key) = value();
-        };
-        driver.if_blocks.back().push_back(f);
+do_counter:
+    "identifier" {
+        if (!driver.integers.has($1)) {
+            driver.integers.declare($1);
+        }
+        $$ = $1;
     }
-    | "print" integer_expression {
-        IntExpr result = $2;
-        auto f = [result, this]() {
-            std::cout << result() << std::endl;
-        };
-        driver.if_blocks.back().push_back(f);
-    }
+
+do_statements:
+    %empty
+    | statement "n" do_statements
+
 %%
-
-void
-yy::parser::error(const location_type& l, const std::string& m)
-{
+void yy::parser::error(const location_type& l, const std::string& m) {
   std::cerr << l << ": " << m << '\n';
 }

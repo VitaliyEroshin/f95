@@ -5,6 +5,7 @@
     #include <cstring> // strerror
     #include <string>
     #include <iostream>
+    #include <algorithm>
     #include "driver.hh"
     #include "parser.hh"
 %}
@@ -21,6 +22,12 @@
     const yy::parser::location_type& loc
   );
 
+  yy::parser::symbol_type make_STRING(
+    const std::string &s,
+    const yy::parser::location_type& loc
+  );
+
+
   void Scanner::UpdateLocation() {
     if (driver.location_debug) {
         std::cerr << "Action called " << driver.location << std::endl;
@@ -29,9 +36,10 @@
   }
 %}
 
-id    [a-zA-Z][a-zA-Z_0-9]*
-int   [0-9]+
-blank [ \t\r]
+string  ["][^"]*["]
+id      [a-zA-Z][a-zA-Z_0-9]*
+int     [0-9]+
+blank   [ \t\r]
 
 %{
   #define YY_USER_ACTION UpdateLocation();
@@ -47,10 +55,13 @@ blank [ \t\r]
 "program"           return yy::parser::make_PROGRAM(loc);
 "end"               return yy::parser::make_END(loc);
 "integer"           return yy::parser::make_INT_DECLARATION(loc);
+"character"         return yy::parser::make_CHARACTER(loc);
+"len"               return yy::parser::make_LEN(loc);
 "print"             return yy::parser::make_PRINT(loc);
 "if"                return yy::parser::make_IF(loc);
 "else"              return yy::parser::make_ELSE(loc);
 "then"              return yy::parser::make_THEN(loc);
+"do"                return yy::parser::make_DO(loc);
 "::"                return yy::parser::make_DOUBLE_COLON(loc);
 ","                 return yy::parser::make_COMMA(loc);
 "="                 return yy::parser::make_EQUAL(loc);
@@ -61,6 +72,8 @@ blank [ \t\r]
 "%"                 return yy::parser::make_PERCENT(loc);
 "("                 return yy::parser::make_LPAREN(loc);
 ")"                 return yy::parser::make_RPAREN(loc);
+"/="                return yy::parser::make_NEQ(loc);
+"//"                return yy::parser::make_CONCAT(loc);
 ".AND."             return yy::parser::make_AND_SYM(loc);
 ".OR."              return yy::parser::make_OR_SYM(loc);
 ".NOT."             return yy::parser::make_NOT_SYM(loc);
@@ -91,6 +104,9 @@ blank [ \t\r]
 .                   {
                         throw yy::parser::syntax_error(loc, "invalid character: " + std::string(yytext));
                     }
+
+{string}            return make_STRING(yytext, loc);
+
 <<EOF>>             return yy::parser::make_EOF (loc);
 %%
 
@@ -103,4 +119,14 @@ yy::parser::symbol_type make_INTEGER(
   if (! (INT_MIN <= n && n <= INT_MAX && errno != ERANGE))
     throw yy::parser::syntax_error(loc, "integer is out of range: " + s);
   return yy::parser::make_INTEGER((int) n, loc);
+}
+
+yy::parser::symbol_type make_STRING(
+  const std::string &s,
+  const yy::parser::location_type& loc
+) {
+  assert(s[0] == '\"' && s.back() == '\"');
+  std::string quoted(s.size() - 2, '_');
+  std::copy(s.begin() + 1, s.end(), quoted.begin());
+  return yy::parser::make_STRING(quoted, loc);
 }
