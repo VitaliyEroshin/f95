@@ -1,0 +1,4 @@
+program p
+    integer x = (5 + 1) * 7 % 5
+    print *, x
+end program p

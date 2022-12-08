@@ -1,0 +1,57 @@
+program logic
+    integer :: x=5, y=10
+    if (x == 5) print *, y
+
+    if ((x .GT. 3) .AND. .NOT. (y > 20)) then
+        print *, x
+    end if
+
+    integer :: one=1, zero=0
+
+    if ((x .LS. y) .AND. (x .LE. x) .AND. .NOT.(x .NE. x)) then
+        print *, one
+    end if
+
+    if (x .LS. 6) then
+        print *, one
+    else
+        print *, zero
+    end if
+
+    if (x .LS. 5) then
+        print *, zero
+    else
+        print *, one
+    end if
+
+    if (x .GT. 4) then
+        print *, one
+    else
+        print *, zero
+    end if
+
+    if (x .GT. 5) then
+        print *, zero
+    else
+        print *, one
+    end if
+
+    if (x .GE. 5) then
+        print *, one
+    else
+        print *, zero
+    end if
+
+    if (x .EQ. 5) then
+        print *, one
+    else
+        print *, zero
+    end if
+
+    if (x .NE. 5) then
+        print *, zero
+    else
+        print *, one
+    end if
+    
+end program logic
